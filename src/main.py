@@ -4,6 +4,10 @@ import argparse
 
 from dotenv import load_dotenv
 
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("Bybit MCP Server")
+
 
 def main():
     load_dotenv()
@@ -49,7 +53,7 @@ def main():
 
     import src.tools  # noqa: F401 — triggers tool registration
 
-    from src import mcp
+    # from src import mcp
     mcp.run(transport=args.transport)
 
 
