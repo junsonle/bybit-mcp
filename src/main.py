@@ -3,13 +3,10 @@ import os
 import argparse
 import nest_asyncio
 from dotenv import load_dotenv
-from fastmcp import FastMCP  # ✅ Sửa import này
 
-# ✅ Apply nest_asyncio ngay từ đầu
+# Apply nest_asyncio early
 nest_asyncio.apply()
 
-# ✅ Khởi tạo mcp ở đây hoặc trong main()
-mcp = FastMCP("Bybit MCP Server")
 
 def main():
     load_dotenv()
@@ -25,7 +22,7 @@ def main():
     parser.add_argument("--testnet", action="store_true",
                         help="Use Bybit testnet (or set BYBIT_TESTNET=true env var)")
     parser.add_argument("--transport", type=str, default="stdio",
-                        choices=["stdio", "sse"],  # ✅ Bỏ streamable-http nếu không dùng
+                        choices=["stdio", "sse"],
                         help="MCP transport type (default: stdio)")
     parser.add_argument("--host", type=str, default="127.0.0.1",
                         help="Host for SSE transport (default: 127.0.0.1)")
@@ -51,14 +48,17 @@ def main():
     logger.info("Bybit MCP Server starting (base_url=%s, has_credentials=%s, transport=%s)",
                 config.base_url, config.has_credentials, args.transport)
     
-    # ✅ Import tools để register
+    # Import tools to register them
     import src.tools  # noqa: F401
     
-    # ✅ Chạy server với transport phù hợp
+    # Import the shared MCP instance and run
+    from src import mcp
+    
     if args.transport == "sse":
         mcp.run(transport="sse", host=args.host, port=args.port)
     else:
         mcp.run(transport="stdio")
+
 
 if __name__ == "__main__":
     main()
