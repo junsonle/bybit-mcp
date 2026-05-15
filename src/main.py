@@ -2,6 +2,7 @@ import logging
 import os
 import argparse
 
+import nest_asyncio
 from dotenv import load_dotenv
 
 from mcp.server.fastmcp import FastMCP
@@ -10,6 +11,7 @@ mcp = FastMCP("Bybit MCP Server")
 
 
 def main():
+    nest_asyncio.apply()
     load_dotenv()
 
     parser = argparse.ArgumentParser(description="Bybit MCP Server")
