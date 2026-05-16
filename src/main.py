@@ -1,14 +1,9 @@
 import logging
 import os
 import argparse
-import nest_asyncio
-from dotenv import load_dotenv
-
-# Apply nest_asyncio early
-nest_asyncio.apply()
-
 
 def main():
+    from dotenv import load_dotenv
     load_dotenv()
     
     parser = argparse.ArgumentParser(description="Bybit MCP Server")
@@ -48,10 +43,8 @@ def main():
     logger.info("Bybit MCP Server starting (base_url=%s, has_credentials=%s, transport=%s)",
                 config.base_url, config.has_credentials, args.transport)
     
-    # Import tools to register them
     import src.tools  # noqa: F401
     
-    # Import the shared MCP instance and run
     from src import mcp
     
     if args.transport == "sse":
