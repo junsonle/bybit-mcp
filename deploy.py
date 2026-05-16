@@ -10,30 +10,22 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 
-class HorizonFastMCP(FastMCP):
-    """FastMCP subclass that handles nested event loops (required for Horizon)."""
+class HorizonMCP(FastMCP):
+    """FastMCP subclass that reuses existing event loop (required for Horizon)."""
 
     def run(self, transport=None, host=None, port=None):
-        """Override run to use existing event loop if available."""
-        import nest_asyncio
-        try:
-            nest_asyncio.apply()
-        except Exception:
-            pass
-
         try:
             loop = asyncio.get_running_loop()
-            # Already in a loop - run coroutine directly
-            return loop.run_until_complete(
-                self.run_async(transport=transport, host=host, port=port)
-            )
+            # We're already in a running loop (Horizon context).
+            # Schedule run_async as a task and return immediately.
+            asyncio.create_task(self.run_async(transport=transport, host=host, port=port))
         except RuntimeError:
             # No loop yet - use normal asyncio.run
             return super().run(transport=transport, host=host, port=port)
 
 
 # Create MCP server - fastmcp inspect looks for: mcp, server, or app
-mcp = HorizonFastMCP("Bybit MCP Server")
+mcp = HorizonMCP("Bybit MCP Server")
 
 # Patch src.mcp so tools register with THIS instance
 import src
