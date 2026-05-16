@@ -5,6 +5,10 @@ Entrypoint: deploy.py
 Exports: mcp (FastMCP server instance)
 """
 
+# Allow nested event loops (Horizon already has one running)
+import nest_asyncio
+nest_asyncio.apply()
+
 import os
 from mcp.server.fastmcp import FastMCP
 
