@@ -8,53 +8,23 @@ Exports: mcp (FastMCP server instance)
 import os
 from mcp.server.fastmcp import FastMCP
 
-# 1. Tạo MCP server trực tiếp tại đây - fastmcp inspect sẽ tìm biến này
+# 1. Create MCP server - fastmcp inspect looks for: mcp, server, or app
 mcp = FastMCP("Bybit MCP Server")
 
-# 2. Patch src.mcp trỏ về instance này để tools đăng ký đúng chỗ
+# 2. Patch src.mcp so tools register with THIS instance
 import src
 src.mcp = mcp
 
-# 3. Import tools để đăng ký với mcp ở trên
+# 3. Register all tools
 import src.tools  # noqa: F401
 
+# 4. Configure Bybit client
+from dotenv import load_dotenv
+load_dotenv()
 
-def _setup():
-    """Configure Bybit client at runtime."""
-    from dotenv import load_dotenv
-    load_dotenv()
+api_key = os.environ.get("BYBIT_API_KEY", "")
+secret_key = os.environ.get("BYBIT_SECRET_KEY", "")
+testnet = os.environ.get("BYBIT_TESTNET", "false").lower() in ("true", "1", "yes")
 
-    api_key = os.environ.get("BYBIT_API_KEY", "")
-    secret_key = os.environ.get("BYBIT_SECRET_KEY", "")
-    testnet = os.environ.get("BYBIT_TESTNET", "false").lower() in ("true", "1", "yes")
-
-    from src.client import config
-    config.configure(api_key=api_key, secret_key=secret_key, testnet=testnet)
-
-
-from prefect import flow
-
-
-@flow(name="bybit-mcp-server", log_prints=True)
-def mcp_server_flow(
-    transport: str = "sse",
-    host: str = "0.0.0.0",
-    port: int = 8000,
-):
-    """Run the Bybit MCP Server."""
-    _setup()
-
-    from src.client import config
-    print(f"Bybit MCP Server starting")
-    print(f"  base_url: {config.base_url}")
-    print(f"  has_credentials: {config.has_credentials}")
-    print(f"  transport: {transport}")
-
-    if transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
-    else:
-        mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    mcp_server_flow()
+from src.client import config
+config.configure(api_key=api_key, secret_key=secret_key, testnet=testnet)
