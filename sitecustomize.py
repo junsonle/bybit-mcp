@@ -1,3 +1,7 @@
-# Apply nest_asyncio at Python startup - before any other code runs
+# sitecustomize.py - loaded automatically at Python startup
+# Applies nest_asyncio to handle nested event loops (required for Horizon)
 import nest_asyncio
-nest_asyncio.apply()
+try:
+    nest_asyncio.apply()
+except Exception:
+    pass

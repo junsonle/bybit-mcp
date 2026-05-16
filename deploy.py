@@ -5,34 +5,35 @@ Entrypoint: deploy.py
 Exports: mcp (FastMCP server instance)
 """
 
-# MUST be first: patch asyncio.run to handle nested loops
-import asyncio
-import nest_asyncio
-
-# Apply nest_asyncio to allow nested event loops
-try:
-    nest_asyncio.apply()
-except RuntimeError:
-    pass  # No loop yet, that's fine
-
-# Also patch asyncio.run to reuse existing loop
-_original_asyncio_run = asyncio.run
-def _safe_run(coro, **kwargs):
-    try:
-        loop = asyncio.get_running_loop()
-        # Already in a loop - use run_coroutine_threadsafe
-        import concurrent.futures
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result()
-    except RuntimeError:
-        return _original_asyncio_run(coro, **kwargs)
-asyncio.run = _safe_run
-
 import os
+import asyncio
 from mcp.server.fastmcp import FastMCP
 
+
+class HorizonFastMCP(FastMCP):
+    """FastMCP subclass that handles nested event loops (required for Horizon)."""
+
+    def run(self, transport=None, host=None, port=None):
+        """Override run to use existing event loop if available."""
+        import nest_asyncio
+        try:
+            nest_asyncio.apply()
+        except Exception:
+            pass
+
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in a loop - run coroutine directly
+            return loop.run_until_complete(
+                self.run_async(transport=transport, host=host, port=port)
+            )
+        except RuntimeError:
+            # No loop yet - use normal asyncio.run
+            return super().run(transport=transport, host=host, port=port)
+
+
 # Create MCP server - fastmcp inspect looks for: mcp, server, or app
-mcp = FastMCP("Bybit MCP Server")
+mcp = HorizonFastMCP("Bybit MCP Server")
 
 # Patch src.mcp so tools register with THIS instance
 import src
