@@ -3,6 +3,7 @@ import time
 import hmac
 import hashlib
 import json
+import os
 import requests
 
 logger = logging.getLogger("bybit-mcp")
@@ -17,8 +18,11 @@ class Config:
     def configure(self, api_key: str, secret_key: str, testnet: bool = False):
         self.api_key = api_key or ""
         self.secret_key = secret_key or ""
-        if testnet:
-            self.base_url = "https://api-testnet.bybit.com"
+        custom_base_url = os.environ.get("BYBIT_BASE_URL", "").strip()
+        if custom_base_url:
+            self.base_url = custom_base_url.rstrip("/")
+        else:
+            self.base_url = "https://api-testnet.bybit.com" if testnet else "https://api.bybit.com"
 
     @property
     def has_credentials(self) -> bool:
@@ -26,6 +30,63 @@ class Config:
 
 
 config = Config()
+
+REQUEST_TIMEOUT = 20
+DEFAULT_HEADERS = {
+    "Accept": "application/json",
+    "User-Agent": "bybit-mcp-server/0.2.0",
+}
+
+
+def _response_body_preview(response: requests.Response, limit: int = 500) -> str:
+    return response.text.strip().replace("\r", "\\r").replace("\n", "\\n")[:limit]
+
+
+def _decode_bybit_response(response: requests.Response, request_name: str) -> dict:
+    try:
+        data = response.json()
+    except ValueError as e:
+        body_preview = _response_body_preview(response)
+        logger.error(
+            "%s returned non-JSON response status=%s content_type=%s body=%r",
+            request_name,
+            response.status_code,
+            response.headers.get("content-type", ""),
+            body_preview,
+        )
+        return {
+            "error": "Bybit returned a non-JSON response",
+            "parse_error": str(e),
+            "status_code": response.status_code,
+            "content_type": response.headers.get("content-type", ""),
+            "url": response.url,
+            "body_preview": body_preview,
+        }
+
+    if not isinstance(data, dict):
+        return {
+            "error": "Bybit returned an unexpected JSON response",
+            "status_code": response.status_code,
+            "url": response.url,
+            "body_preview": _response_body_preview(response),
+        }
+
+    return data
+
+
+def _bybit_result(data: dict, request_name: str) -> dict:
+    if "error" in data:
+        return data
+    if data.get("retCode") == 0:
+        logger.debug("%s success", request_name)
+        return data.get("result", {})
+    logger.warning(
+        "%s retCode=%s retMsg=%s",
+        request_name,
+        data.get("retCode"),
+        data.get("retMsg"),
+    )
+    return {"error": data.get("retMsg", "Unknown error"), "retCode": data.get("retCode")}
 
 
 def _sign_request(timestamp: str, params: str) -> str:
@@ -64,16 +125,16 @@ def _public_get(endpoint: str, params: dict) -> dict:
     """Make an unauthenticated GET request to Bybit V5 API."""
     logger.debug("PUBLIC GET %s params=%s", endpoint, params)
     try:
-        response = requests.get(f"{config.base_url}{endpoint}", params=params)
-        data = response.json()
+        response = requests.get(
+            f"{config.base_url}{endpoint}",
+            headers=DEFAULT_HEADERS,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+        )
     except requests.RequestException as e:
         logger.error("PUBLIC GET %s failed: %s", endpoint, e)
         return {"error": f"Request failed: {e}"}
-    if data.get("retCode") == 0:
-        logger.debug("PUBLIC GET %s success", endpoint)
-        return data.get("result", {})
-    logger.warning("PUBLIC GET %s retCode=%s retMsg=%s", endpoint, data.get("retCode"), data.get("retMsg"))
-    return {"error": data.get("retMsg", "Unknown error"), "retCode": data.get("retCode")}
+    return _bybit_result(_decode_bybit_response(response, f"PUBLIC GET {endpoint}"), f"PUBLIC GET {endpoint}")
 
 
 def _signed_get(endpoint: str, params: dict) -> dict:
@@ -85,18 +146,18 @@ def _signed_get(endpoint: str, params: dict) -> dict:
     timestamp = str(int(time.time() * 1000))
     query_string = "&".join([f"{k}={v}" for k, v in params.items()])
     signature = _sign_request(timestamp, query_string)
-    headers = _auth_headers(timestamp, signature)
+    headers = {**DEFAULT_HEADERS, **_auth_headers(timestamp, signature)}
     try:
-        response = requests.get(f"{config.base_url}{endpoint}", headers=headers, params=params)
-        data = response.json()
+        response = requests.get(
+            f"{config.base_url}{endpoint}",
+            headers=headers,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+        )
     except requests.RequestException as e:
         logger.error("SIGNED GET %s failed: %s", endpoint, e)
         return {"error": f"Request failed: {e}"}
-    if data.get("retCode") == 0:
-        logger.debug("SIGNED GET %s success", endpoint)
-        return data.get("result", {})
-    logger.warning("SIGNED GET %s retCode=%s retMsg=%s", endpoint, data.get("retCode"), data.get("retMsg"))
-    return {"error": data.get("retMsg", "Unknown error"), "retCode": data.get("retCode")}
+    return _bybit_result(_decode_bybit_response(response, f"SIGNED GET {endpoint}"), f"SIGNED GET {endpoint}")
 
 
 def _signed_post(endpoint: str, params: dict) -> dict:
@@ -108,15 +169,15 @@ def _signed_post(endpoint: str, params: dict) -> dict:
     timestamp = str(int(time.time() * 1000))
     body = json.dumps(params)
     signature = _sign_request(timestamp, body)
-    headers = _auth_headers(timestamp, signature)
+    headers = {**DEFAULT_HEADERS, **_auth_headers(timestamp, signature)}
     try:
-        response = requests.post(f"{config.base_url}{endpoint}", headers=headers, data=body)
-        data = response.json()
+        response = requests.post(
+            f"{config.base_url}{endpoint}",
+            headers=headers,
+            data=body,
+            timeout=REQUEST_TIMEOUT,
+        )
     except requests.RequestException as e:
         logger.error("SIGNED POST %s failed: %s", endpoint, e)
         return {"error": f"Request failed: {e}"}
-    if data.get("retCode") == 0:
-        logger.debug("SIGNED POST %s success", endpoint)
-        return data.get("result", {})
-    logger.warning("SIGNED POST %s retCode=%s retMsg=%s", endpoint, data.get("retCode"), data.get("retMsg"))
-    return {"error": data.get("retMsg", "Unknown error"), "retCode": data.get("retCode")}
+    return _bybit_result(_decode_bybit_response(response, f"SIGNED POST {endpoint}"), f"SIGNED POST {endpoint}")
