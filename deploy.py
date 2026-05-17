@@ -41,7 +41,11 @@ class HorizonMCP(FastMCP):
 
 
 # Create MCP server - fastmcp inspect looks for: mcp, server, or app
-mcp = HorizonMCP("Bybit MCP Server")
+mcp = HorizonMCP(
+    "Bybit MCP Server",
+    host="0.0.0.0",
+    port=8081,
+)
 
 # Patch src.mcp so tools register with THIS instance
 import src
