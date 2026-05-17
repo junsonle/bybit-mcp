@@ -7,6 +7,7 @@ Exports: mcp (FastMCP server instance)
 
 import os
 import asyncio
+import threading
 from mcp.server.fastmcp import FastMCP
 
 
@@ -17,13 +18,23 @@ class HorizonMCP(FastMCP):
         try:
             loop = asyncio.get_running_loop()
             # We're already in a running loop (Horizon context).
-            # Schedule the appropriate async method based on transport.
-            if transport == "sse":
-                asyncio.create_task(self.run_sse_async(mount_path=mount_path))
-            elif transport == "streamable-http":
-                asyncio.create_task(self.run_streamable_http_async())
-            else:
-                asyncio.create_task(self.run_stdio_async())
+            # Schedule the task and block main thread until it completes.
+            done = threading.Event()
+
+            async def _run_and_signal():
+                try:
+                    if transport == "sse":
+                        await self.run_sse_async(mount_path=mount_path)
+                    elif transport == "streamable-http":
+                        await self.run_streamable_http_async()
+                    else:
+                        await self.run_stdio_async()
+                finally:
+                    done.set()
+
+            loop.create_task(_run_and_signal())
+            # Block the main thread while async server runs in background
+            done.wait()
         except RuntimeError:
             # No loop yet - use normal FastMCP.run
             return super().run(transport=transport, mount_path=mount_path)
