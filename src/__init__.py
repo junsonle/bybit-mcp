@@ -1,7 +1,7 @@
-# Lazy re-export mcp from server module
-# Using __getattr__ ensures tools always get the current (possibly patched) instance
-def __getattr__(name):
-    if name == "mcp":
-        from src.server import mcp
-        return mcp
-    raise AttributeError(name)
+"""Shared FastMCP server instance."""
+
+from fastmcp import FastMCP
+
+mcp = FastMCP("Bybit MCP Server")
+
+__all__ = ["mcp"]

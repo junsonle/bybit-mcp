@@ -30,7 +30,7 @@ Bybit MCP Server enables AI assistants like **Claude**, **Cursor**, **ChatGPT**,
 - **🔥 Complete Coverage** — 247 tools spanning every Bybit V5 API endpoint
 - **🔐 Secure by Design** — API credentials never leave your machine
 - **👁️ Read-Only Mode** — Use all market tools without any API key
-- **📡 Triple Transport** — STDIO, SSE, and Streamable HTTP
+- **📡 Remote-ready Transport** — STDIO for local clients, HTTP/SSE for remote testing
 - **🔌 Universal Compatibility** — Works with Claude Desktop, Cursor, ChatGPT, and any MCP client
 - **⚡ Zero Config Start** — Just `uv run bybit.py` and go
 
@@ -177,9 +177,21 @@ Or pass credentials inline in the MCP config:
 
 ```bash
 uv run bybit.py                                        # STDIO (default)
+uv run bybit.py --transport http --port 8000            # HTTP
 uv run bybit.py --transport sse --port 8000             # SSE
-uv run bybit.py --transport streamable-http --port 8000 # Streamable HTTP
 ```
+
+### Deploy to Prefect Horizon
+
+Horizon imports a Python file and looks for a FastMCP server object. Use this configuration at <https://horizon.prefect.io/>:
+
+| Field | Value |
+|-------|-------|
+| Entrypoint | `server.py:mcp` |
+| Requirements | `pyproject.toml` or leave blank |
+| Environment | Set `BYBIT_API_KEY`, `BYBIT_SECRET_KEY`, and `BYBIT_TESTNET` in Horizon |
+
+No `prefect.yaml`, `deploy.py`, Dockerfile, or custom deploy script is required. Push this repo to GitHub, select it in Horizon, enter `server.py:mcp`, and deploy.
 
 ---
 
@@ -245,12 +257,7 @@ uv run bybit.py --transport streamable-http --port 8000 # Streamable HTTP
 <summary><b>📋 View all tool names</b></summary>
 
 ```bash
-uv run python -c "
-import src.tools
-from src import mcp
-for name in sorted(mcp._tool_manager._tools):
-    print(name)
-"
+uv run fastmcp inspect server.py:mcp
 ```
 
 </details>
@@ -261,9 +268,11 @@ for name in sorted(mcp._tool_manager._tools):
 
 ```
 bybit-mcp/
+├── server.py                   # Prefect Horizon entrypoint: server.py:mcp
 ├── bybit.py                    # Entry point (backward compatible)
 ├── src/
 │   ├── __init__.py             # Shared FastMCP instance
+│   ├── bootstrap.py            # Env loading + Bybit client setup
 │   ├── main.py                 # CLI: dotenv + argparse + logging + mcp.run()
 │   ├── client.py               # Config singleton + HMAC signing + HTTP methods
 │   └── tools/
@@ -331,7 +340,10 @@ Test that the server can start and respond to MCP protocol:
 
 ```bash
 # Test import
-uv run python -c "from src.main import main; print('Import OK')"
+uv run python -c "from server import mcp; print('Import OK')"
+
+# Inspect what Horizon will see
+uv run fastmcp inspect server.py:mcp
 
 # Test MCP initialize handshake
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' | uv run bybit.py
@@ -393,6 +405,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 | [Bybit V5 API Docs](https://bybit-exchange.github.io/docs/v5/intro) | Official Bybit API documentation |
 | [Bybit Testnet](https://testnet.bybit.com/) | Practice trading with test funds |
 | [MCP Specification](https://modelcontextprotocol.io/) | Model Context Protocol spec |
+| [FastMCP Docs](https://gofastmcp.com/) | FastMCP server framework and CLI |
+| [Prefect Horizon](https://horizon.prefect.io/) | Hosted deployment for FastMCP servers |
 | [uv Package Manager](https://docs.astral.sh/uv/) | Fast Python package manager |
 
 ---

@@ -1,4 +1,3 @@
-from functools import lru_cache
 from typing import Any
 
 from src import mcp
@@ -6,7 +5,6 @@ from src.client import _public_get
 
 
 @mcp.tool()
-@lru_cache(maxsize=100)
 def get_symbol_price(symbol: str, category: str = "spot") -> Any:
     """
     Get the current price of a cryptocurrency pair.
