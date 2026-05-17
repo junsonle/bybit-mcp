@@ -13,15 +13,20 @@ from mcp.server.fastmcp import FastMCP
 class HorizonMCP(FastMCP):
     """FastMCP subclass that reuses existing event loop (required for Horizon)."""
 
-    def run(self, transport=None, host=None, port=None):
+    def run(self, transport=None, mount_path=None):
         try:
             loop = asyncio.get_running_loop()
             # We're already in a running loop (Horizon context).
-            # Schedule run_async as a task and return immediately.
-            asyncio.create_task(self.run_async(transport=transport, host=host, port=port))
+            # Schedule the appropriate async method based on transport.
+            if transport == "sse":
+                asyncio.create_task(self.run_sse_async(mount_path=mount_path))
+            elif transport == "streamable-http":
+                asyncio.create_task(self.run_streamable_http_async())
+            else:
+                asyncio.create_task(self.run_stdio_async())
         except RuntimeError:
-            # No loop yet - use normal asyncio.run
-            return super().run(transport=transport, host=host, port=port)
+            # No loop yet - use normal FastMCP.run
+            return super().run(transport=transport, mount_path=mount_path)
 
 
 # Create MCP server - fastmcp inspect looks for: mcp, server, or app
